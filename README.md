@@ -46,3 +46,7 @@ The result of the code above:
 ## Issues
 
 Please file any issues, bugs or feature request as an [issue](https://github.com/nesyou01/LazyStaggeredGrid/issues) on our GitHub page.
+
+## Buy me a coffe
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/nesyou)
