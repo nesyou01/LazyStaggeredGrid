@@ -100,40 +100,61 @@ internal fun StaggeredGrid(
     }
 
     val nestedScroll = object : NestedScrollConnection {
-        override suspend fun onPreFling(available: Velocity): Velocity {
-            coroutineScope.launch {
-                joinAll(*states.map { launch { flingBehavior(-available.y, it) } }.toTypedArray())
-            }
-            return super.onPreFling(available)
+        var job: MutableList<Job> = mutableListOf()
+        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+            job.forEach { it.cancel() }
+            job.clear()
+            job = coroutineScope {
+                states.map {
+                    launch {
+                        flingBehavior(-available.y, it)
+                    }
+                }
+            } as MutableList<Job>
+            return super.onPostFling(consumed, available)
         }
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            states.forEach {
-                it.dispatchRawDelta(-available.y)
-            }
-            return super.onPreScroll(available, source)
+
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            job.forEach { it.cancel() }
+            job.clear()
+            job.add(
+                coroutineScope.launch {
+                    states.forEach {
+                        it.scrollBy(-available.y)
+                    }
+                },
+            )
+            return super.onPostScroll(consumed, available, source)
         }
     }
-
-    Row(
+    Box(
         Modifier.nestedScroll(nestedScroll)
     ) {
-        repeat(columnsNumber) {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1F)
-                    .disabledVerticalPointerInputScroll(),
-                state = states[it],
-                contentPadding = PaddingValues(
-                    start = if (it == 0) padding.calculateLeftPadding(layoutDirection) else 0.dp,
-                    end = if (it == columnsNumber - 1) padding.calculateRightPadding(layoutDirection) else 0.dp,
-                    top = padding.calculateTopPadding(),
-                    bottom = padding.calculateBottomPadding()
-                )
-            ) {
-                for (i in scope.content.indices step columnsNumber) {
-                    if (scope.content.size > i + it) {
-                        item {
-                            scope.content[i + it]()
+        Row {
+            repeat(columnsNumber) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1F),
+                    state = states[it],
+                    contentPadding = PaddingValues(
+                        start = if (it == 0) padding.calculateLeftPadding(layoutDirection) else 0.dp,
+                        end = if (it == columnsNumber - 1) padding.calculateRightPadding(
+                            layoutDirection
+                        ) else 0.dp,
+                        top = padding.calculateTopPadding(),
+                        bottom = padding.calculateBottomPadding()
+                    ),
+                    userScrollEnabled = false
+                ) {
+                    for (i in scope.content.indices step columnsNumber) {
+                        if (scope.content.size > i + it) {
+                            item {
+                                scope.content[i + it]()
+                            }
                         }
                     }
                 }
@@ -226,14 +247,4 @@ interface StaggeredGridScope {
      * @param itemContent items content
      */
     fun <T> items(items: List<T>, itemContent: @Composable (item: T) -> Unit)
-}
-
-internal fun Modifier.disabledVerticalPointerInputScroll() =
-    this.nestedScroll(VerticalScrollConsumer)
-
-internal val VerticalScrollConsumer = object : NestedScrollConnection {
-    override fun onPreScroll(available: Offset, source: NestedScrollSource) =
-        available.copy(x = 0f)
-
-    override suspend fun onPreFling(available: Velocity) = available.copy(x = 0f)
 }
